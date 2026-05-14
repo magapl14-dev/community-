@@ -2,9 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@qd/shared'],
-  experimental: {
-    typedRoutes: true,
-  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'storage.yandexcloud.net' },
