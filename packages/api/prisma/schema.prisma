@@ -1,0 +1,302 @@
+// Quantum Dagestan — Prisma schema (SRS v1.0)
+// UUID v4 для всех PK, TIMESTAMPTZ (UTC) для timestamps, отображение в UTC+3.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────── ENUM TYPES ────────────────────────
+
+enum UserRole {
+  admin
+  km
+  member
+}
+
+enum EventFormat {
+  offline
+  online
+  hybrid
+}
+
+enum EventStatus {
+  draft // черновик — не виден участникам
+  published // опубликовано — видно всем
+  cancelled // отменено — отправляется отмена push
+  past // прошло — выставляется cron в 00:01
+}
+
+enum MembershipStatus {
+  pending // ожидает оплаты
+  active // активное членство
+  expired // истекло
+  cancelled // отменено вручную
+}
+
+enum ApplicationStatus {
+  new // не рассмотрена
+  reviewing // в обработке
+  approved // одобрено — создан аккаунт
+  rejected // отклонено
+}
+
+enum NewsType {
+  news // новость
+  announcement // объявление — отправляется push
+  pinned // закреплённое — наверху ленты всегда
+}
+
+enum RegistrationStatus {
+  registered // записан
+  attended // присутствовал (отметила КМ)
+  cancelled // отменено самим
+}
+
+// ──────────────────────── users ────────────────────────
+
+model User {
+  id            String    @id @default(uuid())
+  telegramId    BigInt?   @unique @map("telegram_id")
+  email         String?   @unique
+  passwordHash  String?   @map("password_hash")
+  name          String
+  avatarUrl     String?   @map("avatar_url")
+  role          UserRole  @default(member)
+  isActive      Boolean   @default(true) @map("is_active")
+  blockReason   String?   @map("block_reason")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  member        Member?
+  memberships   Membership[]
+  registrations EventRegistration[]
+  pushTokens    PushToken[]
+  eventsCreated Event[]
+  newsCreated   NewsPost[]
+  reviewedApps  Application[] @relation("reviewer")
+  renewedByMe   Membership[]  @relation("renewed_by")
+
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+// ──────────────────────── members ────────────────────────
+
+model Member {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  position          String?
+  company           String?
+  industry          String?
+  city              String?  @default("Махачкала")
+  bio               String?  // max 500 символов
+  lookingFor        String?  @map("looking_for") // max 200
+  canHelpWith       String?  @map("can_help_with") // max 200
+  telegramUsername  String?  @map("telegram_username") // без @
+  phone             String?
+  skills            String[] @default([])
+  isPublic          Boolean  @default(true) @map("is_public")
+  joinedClubAt      DateTime @map("joined_club_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([industry])
+  @@index([city])
+  @@index([isPublic])
+  @@map("members")
+}
+
+// ──────────────────────── memberships ────────────────────────
+
+model Membership {
+  id              String           @id @default(uuid())
+  userId          String           @map("user_id")
+  plan            String           // "base" | "premium"
+  amount          Int              // в копейках: 3_000_000 = 30 000 ₽
+  startsAt        DateTime?        @map("starts_at")
+  expiresAt       DateTime         @map("expires_at")
+  status          MembershipStatus @default(pending)
+  paymentId       String?          @unique @map("payment_id")
+  paymentMethod   String?          @map("payment_method")
+  renewedById     String?          @map("renewed_by_id")
+  reminderSentAt  DateTime?        @map("reminder_sent_at")
+  notes           String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  user      User  @relation(fields: [userId], references: [id])
+  renewedBy User? @relation("renewed_by", fields: [renewedById], references: [id])
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@map("memberships")
+}
+
+// ──────────────────────── events ────────────────────────
+
+model Event {
+  id                String      @id @default(uuid())
+  title             String
+  description       String?     // Markdown
+  format            EventFormat @default(offline)
+  startAt           DateTime    @map("start_at")
+  endAt             DateTime?   @map("end_at")
+  location          String?
+  capacity          Int?
+  coverUrl          String?     @map("cover_url")
+  status            EventStatus @default(draft)
+  isMembersOnly     Boolean     @default(true) @map("is_members_only")
+  materialsVideoUrl String?     @map("materials_video_url")
+  createdById       String      @map("created_by_id")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  createdBy     User                @relation(fields: [createdById], references: [id])
+  registrations EventRegistration[]
+
+  @@index([status, startAt])
+  @@index([startAt])
+  @@map("events")
+}
+
+// ──────────────────────── event_registrations ────────────────────────
+
+model EventRegistration {
+  id          String             @id @default(uuid())
+  eventId     String             @map("event_id")
+  userId      String             @map("user_id")
+  status      RegistrationStatus @default(registered)
+  cancelledAt DateTime?          @map("cancelled_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId]) // одна регистрация — один пользователь
+  @@index([userId])
+  @@map("event_registrations")
+}
+
+// ──────────────────────── news_posts ────────────────────────
+
+model NewsPost {
+  id          String    @id @default(uuid())
+  title       String
+  body        String?   // Markdown
+  type        NewsType  @default(news)
+  authorId    String    @map("author_id")
+  isPinned    Boolean   @default(false) @map("is_pinned")
+  publishedAt DateTime? @map("published_at")
+  pushSentAt  DateTime? @map("push_sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([publishedAt])
+  @@index([isPinned])
+  @@map("news_posts")
+}
+
+// ──────────────────────── applications ────────────────────────
+
+model Application {
+  id             String            @id @default(uuid())
+  name           String
+  phone          String
+  email          String?
+  telegram       String?
+  position       String?
+  industry       String?
+  revenueRange   String?           @map("revenue_range")
+  motivation     String?
+  status         ApplicationStatus @default(new)
+  reviewedById   String?           @map("reviewed_by_id")
+  reviewedAt     DateTime?         @map("reviewed_at")
+  notes          String?
+  consentGivenAt DateTime?         @map("consent_given_at")
+  consentIp      String?           @map("consent_ip")
+  createdAt      DateTime          @default(now()) @map("created_at")
+
+  reviewedBy User? @relation("reviewer", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([phone])
+  @@map("applications")
+}
+
+// ──────────────────────── library ────────────────────────
+
+model LibraryCategory {
+  id        String           @id @default(uuid())
+  slug      String           @unique
+  title     String
+  sortOrder Int              @default(0) @map("sort_order")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  articles  LibraryArticle[]
+
+  @@map("library_categories")
+}
+
+model LibraryArticle {
+  id          String        @id @default(uuid())
+  categoryId  String        @map("category_id")
+  title       String
+  slug        String        @unique
+  excerpt     String?
+  body        String        // Markdown
+  coverUrl    String?       @map("cover_url")
+  isPublished Boolean       @default(false) @map("is_published")
+  publishedAt DateTime?     @map("published_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  category    LibraryCategory @relation(fields: [categoryId], references: [id])
+  files       LibraryFile[]
+
+  @@index([categoryId])
+  @@index([publishedAt])
+  @@map("library_articles")
+}
+
+model LibraryFile {
+  id          String   @id @default(uuid())
+  articleId   String?  @map("article_id")
+  s3Key       String   @map("s3_key") // ключ в Yandex Object Storage
+  filename    String   // оригинальное имя для display
+  contentType String   @map("content_type")
+  sizeBytes   Int      @map("size_bytes")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  article     LibraryArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+
+  @@index([articleId])
+  @@map("library_files")
+}
+
+// ──────────────────────── push_tokens ────────────────────────
+
+model PushToken {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  token      String   @unique
+  platform   String   // "ios" | "android"
+  isActive   Boolean  @default(true) @map("is_active")
+  appVersion String?  @map("app_version")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+  @@map("push_tokens")
+}

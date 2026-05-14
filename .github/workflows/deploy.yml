@@ -1,12 +1,43 @@
-name: Deploy to VPS
+name: Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @qd/api db:generate
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm -r lint
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
@@ -16,11 +47,31 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
+          # Скрипт стартует с `set -e` — любая ошибка валит деплой.
+          # Пути и имена служб должны совпасть с тем, что реально на сервере;
+          # если они другие — поправь APP_DIR / SERVICES.
           script: |
-            set -e
-            cd /opt/community-
-            git pull origin main
-            source venv/bin/activate
-            pip install -q -r requirements.txt
-            sudo systemctl restart community-
-            echo "Deploy completed at $(date)"
+            set -euo pipefail
+
+            APP_DIR="/opt/community-"
+            SERVICES="qd-api qd-web"
+
+            echo "→ pulling main"
+            cd "$APP_DIR"
+            git fetch --depth=1 origin main
+            git reset --hard origin/main
+
+            echo "→ installing dependencies"
+            pnpm install --frozen-lockfile
+
+            echo "→ prisma generate + migrate deploy"
+            pnpm --filter @qd/api db:generate
+            pnpm --filter @qd/api exec prisma migrate deploy
+
+            echo "→ building api + web"
+            pnpm build
+
+            echo "→ restarting services: $SERVICES"
+            sudo systemctl restart $SERVICES
+
+            echo "✓ deploy completed at $(date -u +%FT%TZ)"

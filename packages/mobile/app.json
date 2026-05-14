@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Quantum Dagestan",
+    "slug": "quantum-dagestan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "qd",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ru.quantumdag.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "ru.quantumdag.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#1B3A6B"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#1B3A6B"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "$EXPO_PUBLIC_API_URL"
+    }
+  }
+}
