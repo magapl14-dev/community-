@@ -29,7 +29,6 @@
     "@fastify/rate-limit": "^9.1.0",
     "@prisma/client": "^5.16.0",
     "@qd/shared": "workspace:*",
-    "@sentry/node": "^8.20.0",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.8.0",
     "date-fns": "^3.6.0",

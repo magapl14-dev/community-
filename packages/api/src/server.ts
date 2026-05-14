@@ -2,13 +2,11 @@ import { buildApp } from './app.js'
 import { env } from './lib/env.js'
 import { logger } from './lib/logger.js'
 import { disconnectDb } from './lib/db.js'
-import { captureException, initSentry } from './lib/sentry.js'
 import { startWorkers } from './jobs/workers.js'
 import { registerCronSchedules, startCronWorker } from './jobs/schedulers.js'
 import { startAdminBot, stopAdminBot } from './bot/admin-bot.js'
 
 async function main() {
-  initSentry()
   const app = await buildApp()
 
   const workers = [...startWorkers(), startCronWorker()]
@@ -34,6 +32,5 @@ async function main() {
 
 main().catch((err) => {
   logger.fatal({ err }, 'fatal startup error')
-  captureException(err, { phase: 'startup' })
   process.exit(1)
 })

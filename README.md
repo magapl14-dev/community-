@@ -104,7 +104,7 @@ push lifecycle (Expo Notifications permission flow + auto-register после lo
 - Unit/integration тесты (vitest + supertest)
 - Playwright E2E для критичных user flows (apply → approve → login → register на событие → оплата)
 - CI/CD: `.github/workflows/ci.yml` запускает `prisma generate` + `pnpm -r typecheck` + `pnpm -r lint` на push/PR в main. Test/migrate-deploy ещё не подключены
-- Sentry: API — init в `server.ts`, capture unhandled-ошибок + fatal startup. Web — `@sentry/nextjs` с client/server/edge config, `instrumentationHook` и `withSentryConfig` обёрткой (source-map upload активен при `SENTRY_AUTH_TOKEN`). Mobile (Expo) — пока не подключён
+- Sentry убран (был API+web), чтобы снизить нагрузку на 1 GB-сервер. Ошибки летят в pino-логи (`/var/log/qd/api.err`, `journalctl -u qd-api`)
 - Грузовое тестирование БД на 1000+ активных пользователей
 
 ## Полезные команды

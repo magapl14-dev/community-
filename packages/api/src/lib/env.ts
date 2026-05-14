@@ -33,8 +33,6 @@ const envSchema = z.object({
   FCM_PRIVATE_KEY: z.string().optional(),
   FCM_CLIENT_EMAIL: z.string().optional(),
 
-  SENTRY_DSN: z.string().optional(),
-
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:3000,http://localhost:8081')
