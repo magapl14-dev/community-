@@ -54,6 +54,23 @@ jobs:
             APP_DIR="/opt/community-"
             SERVICES="qd-api qd-web"
 
+            # Non-interactive SSH не подгружает .bashrc — вручную добавим
+            # типовые пути и source nvm, если он у юзера используется.
+            export PATH="$HOME/.local/share/pnpm:$HOME/.npm-global/bin:$HOME/.nvm/versions/node/$(ls $HOME/.nvm/versions/node 2>/dev/null | tail -1)/bin:/usr/local/bin:/usr/bin:$PATH"
+            [ -f "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+
+            echo "→ checking node"
+            command -v node >/dev/null || { echo "❌ Node.js не установлен на сервере. Поставь Node 20: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"; exit 1; }
+            node --version
+
+            echo "→ ensuring pnpm via corepack"
+            if ! command -v pnpm >/dev/null; then
+              corepack enable
+              corepack prepare pnpm@9.0.0 --activate
+              export PATH="$HOME/.local/share/pnpm:$PATH"
+            fi
+            pnpm --version
+
             echo "→ pulling main"
             cd "$APP_DIR"
             git fetch --depth=1 origin main
