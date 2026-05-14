@@ -1,5 +1,6 @@
 import { apiServer } from '@/lib/api-server'
 import Link from 'next/link'
+import type { Route } from 'next'
 
 interface Analytics {
   totalMembers: number
@@ -66,7 +67,7 @@ function Stat({
 function QuickLink({ href, title, desc }: { href: string; title: string; desc: string }) {
   return (
     <Link
-      href={href}
+      href={href as Route}
       className="rounded-xl border border-slate-700 bg-slate-800 p-5 hover:bg-slate-700/70 transition block"
     >
       <h3 className="font-semibold">{title}</h3>
