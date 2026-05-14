@@ -14,6 +14,15 @@ const nextConfig = {
       { protocol: 'https', hostname: '*.quantum-dag.ru' },
     ],
   },
+  // @qd/shared использует NodeNext-стиль импортов с `.js` суффиксами
+  // (требуется для api/tsc), но реально файлы — `.ts`. Подсказываем webpack.
+  webpack: (config) => {
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js'],
+      '.mjs': ['.mts', '.mjs'],
+    }
+    return config
+  },
 }
 
 // withSentryConfig — обёртка, которая в build-time подцепляет загрузку source maps
